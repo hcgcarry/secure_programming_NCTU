@@ -1,0 +1,4 @@
+[0x01] HNP-revenge [250]
+nc edu-ctf.csie.org 42074
+
+server.py

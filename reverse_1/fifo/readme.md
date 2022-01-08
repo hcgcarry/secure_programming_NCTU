@@ -1,0 +1,2 @@
+gdb 設定breakpoint的時候 如果是16進為記得加上0x
+FLAG{FIFO_1s_D1sGVsTln9}

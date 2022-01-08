@@ -1,0 +1,1 @@
+SELECT username, flag FROM users WHERE username='' or flag REGEXP '^FLAG.*' -- 

