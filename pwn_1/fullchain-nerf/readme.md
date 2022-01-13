@@ -1,5 +1,6 @@
 nc edu-ctf.zoolab.org 30206
 
+# 這題好像要多跑幾次,因為有可能沒有出來
 
 ROPgadget --binary ./test --only "pop|ret"
 

